@@ -1,0 +1,93 @@
+#include <Arduino.h>
+#include <SPI.h>
+#include <Adafruit_GFX.h>
+#include <Adafruit_ST7789.h>
+#include <BLEDevice.h>
+#include <BLEScan.h>
+#include <BLEAdvertisedDevice.h>
+
+// IdeaSpark 1.14-inch display pins
+#define LCD_CS   15
+#define LCD_DC    2
+#define LCD_RST   4
+#define LCD_BLK  32
+
+Adafruit_ST7789 lcd(LCD_CS, LCD_DC, LCD_RST);
+BLEScan* scanner;
+
+void showMessage(const char* message) {
+  lcd.fillScreen(ST77XX_BLACK);
+  lcd.setCursor(8, 12);
+  lcd.setTextColor(ST77XX_CYAN);
+  lcd.setTextSize(2);
+  lcd.println(message);
+}
+
+void setup() {
+  Serial.begin(115200);
+
+  pinMode(LCD_BLK, OUTPUT);
+  digitalWrite(LCD_BLK, HIGH);
+
+  lcd.init(135, 240);
+  lcd.setRotation(1);
+  showMessage("Starting BLE...");
+
+  BLEDevice::init("");
+  scanner = BLEDevice::getScan();
+  scanner->setActiveScan(false);
+  scanner->setInterval(100);
+  scanner->setWindow(90);
+}
+
+void loop() {
+  showMessage("Scanning...");
+  BLEScanResults results = scanner->start(5, false);
+
+  lcd.fillScreen(ST77XX_BLACK);
+  lcd.setCursor(5, 4);
+  lcd.setTextColor(ST77XX_CYAN);
+  lcd.setTextSize(1);
+  lcd.println("BLE device names (5 sec)");
+
+  int count = results.getCount();
+  int rows = count < 6 ? count : 6;
+
+  for (int i = 0; i < rows; i++) {
+    BLEAdvertisedDevice device = results.getDevice(i);
+
+    String name;
+    if (device.haveName()) {
+      name = String(device.getName().c_str());
+    } else {
+      name = "(no name)";
+    }
+
+    if (name.length() > 29) {
+      name = name.substring(0, 29);
+    }
+
+    int y = 24 + i * 17;
+    lcd.setCursor(5, y);
+    lcd.setTextColor(ST77XX_WHITE);
+    lcd.print(name);
+
+    lcd.setCursor(205, y);
+    lcd.print(device.getRSSI());
+  }
+
+  if (count == 0) {
+    lcd.setCursor(5, 30);
+    lcd.setTextColor(ST77XX_YELLOW);
+    lcd.println("No devices found");
+  }
+
+  Serial.print("Found ");
+  Serial.print(count);
+  Serial.println(" BLE advertisers");
+
+  // Keep the results on screen for 9 seconds before scanning again.
+  delay(9000);
+
+  scanner->clearResults();
+}
